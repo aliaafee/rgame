@@ -1,0 +1,465 @@
+<html>
+
+<head>
+	<script src="../rgame.js" type="text/javascript" ></script>
+	<script>
+	var snakeSize = 10;
+
+	class SnakeSegment {
+		constructor(position, first) {
+			if (typeof first == "undefined") {
+				first = false;
+			}
+			this.position = rVec(0,0);
+			this.position.copyFrom(position);
+			this.first = first;
+
+			this.pPosition = rVec(0,0);
+			this.pPosition.copyFrom(this.position);
+		}
+
+		setPosition(position) {
+			this.pPosition.copyFrom(this.position);
+			this.position.copyFrom(position);
+		}
+
+		clear(context, timeStamp) {
+			context.clearRect(this.pPosition.x, this.pPosition.y, snakeSize, snakeSize);
+		}
+
+		render(context, timeStamp) {
+			if (this.first) {
+				context.fillStyle = "#AA0000";
+			} else {
+				context.fillStyle = "#AAAAAA";
+			}
+			context.fillRect(this.position.x, this.position.y, snakeSize, snakeSize);
+		}
+	}
+
+	class Snake extends rObject {
+		constructor(name, position, stepInterval, pitWidth, pitHeight) {
+			super(name, position, rVec(snakeSize, snakeSize), 0);
+
+			this.stepInterval = stepInterval;
+			this.pitWidth = pitWidth;
+			this.pitHeight = pitHeight;
+
+			this.direction = rVec(0,1);
+			this.lastTick = 0;
+			this.snakeSegments = [];
+			this.foodPosition = rVec(100,100);
+
+			this.alive = true;
+			
+			this.reset();
+
+			this.fullscreen = false;
+		}
+
+		reset() {
+			this.alive = true;
+			this.direction = rVec(0,1);
+			this.dead = false;
+			this.snakeSegments = [];
+			this.snakeSegments.push(new SnakeSegment(this.position, true));
+			this.growAndStep();
+			this.growAndStep();
+
+			this.randomFood();
+		}
+
+		score() {
+			return this.snakeSegments.length - 3;
+		}
+
+		outOfBounds() {
+			if (this.snakeSegments[0].position.x >= this.pitWidth) {
+				return true;
+			}
+			if (this.snakeSegments[0].position.x < 0) {
+				return true;
+			}
+			if (this.snakeSegments[0].position.y >= this.pitHeight) {
+				return true;
+			}
+			if (this.snakeSegments[0].position.y < 0) {
+				return true;
+			}
+			return false;
+		}
+
+		randomFood() {
+			this.foodPosition.x = Math.round((Math.random() * (this.pitWidth-snakeSize))/snakeSize) * snakeSize;
+			this.foodPosition.y = Math.round((Math.random() * (this.pitHeight-snakeSize))/snakeSize) * snakeSize;
+		}
+
+		foodIntersect(position) {
+			if (this.snakeSegments[0].position.x == position.x &&
+				this.snakeSegments[0].position.y == position.y) {
+				return true;
+			}
+		}
+
+		selfIntersect() {
+			for (var i = 1; i < this.snakeSegments.length; i++) {
+				if (this.snakeSegments[0].position.x == this.snakeSegments[i].position.x &&
+					this.snakeSegments[0].position.y == this.snakeSegments[i].position.y) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		growAndStep() {
+			var newSegment = new SnakeSegment(
+				this.snakeSegments[this.snakeSegments.length-1].position);
+			this.step();
+			this.snakeSegments.push(newSegment);
+		}
+
+		step() {
+			for (var i = this.snakeSegments.length-1; i > 0 ; i--) {
+				this.snakeSegments[i].setPosition(
+					this.snakeSegments[i-1].position);
+			}
+
+			var step = rVec(0,0);
+			step.copyFrom(this.direction);
+			step.mul(snakeSize);
+			step.add(this.snakeSegments[0].position);
+			this.snakeSegments[0].setPosition(step);
+		}
+
+		timeToStep(timeStamp) {
+			var diffTick = timeStamp - this.lastTick;
+ 			if (diffTick > this.stepInterval) {
+				this.lastTick = timeStamp;
+				return true;
+			}
+			return false;
+		}
+
+		animate(timeStamp) {
+			super.animate(timeStamp);
+
+			if (!this.alive) { return; }
+
+			if (this.timeToStep(timeStamp)) {
+				if (this.foodIntersect(this.foodPosition)) {
+					this.growAndStep();
+					this.randomFood();
+				} else {
+					this.step();
+				}
+				if (this.selfIntersect()) {
+					this.alive = false;
+					console.log("dead")
+				}
+				if (this.outOfBounds()) {
+					this.alive = false;
+					console.log("dead")
+				}
+			}
+
+		}
+
+		clear(context, timeStamp) {
+			for (var i = 0; i < this.snakeSegments.length; i++) {
+				this.snakeSegments[i].clear(context,timeStamp);
+			}
+		}
+
+		render(context, timeStamp) {
+			context.fillStyle = "#0000AA";
+			context.fillRect(this.foodPosition.x, this.foodPosition.y, snakeSize, snakeSize);
+			for (var i = 0; i < this.snakeSegments.length; i++) {
+				this.snakeSegments[i].render(context,timeStamp);
+			}
+		}
+
+		goRight() {
+			if (this.direction.x == -1) {return;}
+			this.direction.x = 1;
+			this.direction.y = 0;
+		}
+
+		goLeft() {
+			if (this.direction.x == 1) {return;}
+			this.direction.x = -1;
+			this.direction.y = 0;
+		}
+
+		goUp() {
+			if (this.direction.y == 1) {return;}
+			this.direction.x = 0;
+			this.direction.y = -1;
+		}
+
+		goDown() {
+			if (this.direction.y == -1) {return;}
+			this.direction.x = 0;
+			this.direction.y = 1;
+		}
+	}
+
+	class SnakeGame extends rGame {
+		constructor(canvasContext, audioContext) {
+			super("Snake", canvasContext, audioContext);
+
+		}
+
+		addAssets() {
+			super.addAssets();
+		}
+
+		menuStart() {
+			this.resetGame();
+			this.setLocation("SnakePit");
+		}
+
+		menuResume() {
+			this.setLocation("SnakePit");
+		}
+
+		menuExitToStart() {
+			this.setLocation("Start");
+		}
+
+		menuFullScreen() {
+			if (!this.fullscreen) {
+				this.canvas.webkitRequestFullScreen();
+				this.fullscreen = true;
+				return;
+			}
+			document.webkitCancelFullScreen();
+			this.fullscreen = false;
+		}
+
+		buttonPauseGame() {
+			this.setLocation("Pause");
+		}
+
+		keyDownEvent(event) {
+			var keyCode = event.keyCode;
+		}
+
+		keyUpEvent(event) {
+			var keyCode = event.keyCode;
+			
+			if (keyCode == '38') {
+				//up arrow
+				this.snake.goUp();
+			}
+			if (keyCode == '40') {
+				// down arrow
+				this.snake.goDown();
+			}
+			if (keyCode == '39') {
+				// right arrow
+				this.snake.goRight();
+			}
+			if (keyCode == '37') {
+				// left arrow
+				this.snake.goLeft();
+			}
+			if (keyCode == "27") {
+				this.buttonPauseGame();
+			}			
+		}
+		
+		setupGame() {
+			super.setupGame();
+
+			this.addWindow(
+				new rMenu(
+					"Start", this.canvas.width, this.canvas.height, rVec(this.canvas.width/2-50,94)));
+			this.windows["Start"].addMenuItem(
+				new rMenuItem(
+					"Start",
+					this.menuStart.bind(this)));
+			this.windows["Start"].addMenuItem(
+				new rMenuItem(
+					"Fullscreen",
+					this.menuFullScreen.bind(this)));
+			this.windows["Start"].addObject(
+				new rText(
+					"title",
+					rVec(this.canvas.width/2-40,70),
+					0,
+					"SNAKE",
+					"#000000",
+					"24px Arial"));
+
+
+			this.addWindow(
+				new rMenu(
+					"Pause", this.canvas.width, this.canvas.height, rVec(this.canvas.width/2-50,94)));
+			this.windows["Pause"].addMenuItem(
+				new rMenuItem(
+					"Resume",
+					this.menuResume.bind(this)));
+			this.windows["Pause"].addMenuItem(
+				new rMenuItem(
+					"Exit to Start",
+					this.menuExitToStart.bind(this)));
+			this.windows["Pause"].addMenuItem(
+				new rMenuItem(
+					"Fullscreen",
+					this.menuFullScreen.bind(this)));
+			this.windows["Pause"].addObject(
+				new rText(
+					"title",
+					rVec(this.canvas.width/2-57,70),
+					0,
+					"Game Paused",
+					"#000000",
+					"18px Arial"));
+
+
+			this.addWindow(
+				new rMenu(
+					"Gameover", this.canvas.width, this.canvas.height, rVec(this.canvas.width/2-50,94)));
+			this.windows["Gameover"].addMenuItem(
+				new rMenuItem(
+					"Restart",
+					this.menuStart.bind(this)));
+			this.windows["Gameover"].addMenuItem(
+				new rMenuItem(
+					"Exit to Start",
+					this.menuExitToStart.bind(this)));
+			this.windows["Gameover"].addObject(
+				new rText(
+					"title",
+					rVec(this.canvas.width/2-46,70),
+					0,
+					"Game Over",
+					"#000000",
+					"18px Arial"));
+
+
+
+			this.addWindow(
+				new rWindow(
+					"SnakePit",  this.canvas.width, this.canvas.height));
+			this.windows["SnakePit"].addEventListener("keydown", 
+										this.keyDownEvent.bind(this));
+			this.windows["SnakePit"].addEventListener("keyup", 
+										this.keyUpEvent.bind(this));
+			var backgroundContext = this.windows["SnakePit"].getBackgroundContext();
+			backgroundContext.fillStyle = "#EEEEEE";
+			backgroundContext.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+			this.snake = new Snake("Player", rVec(100,100), 200, 
+									this.canvas.width, this.canvas.height);
+			this.windows["SnakePit"].addObject(this.snake);
+
+			this.windows["SnakePit"].addButton(
+				new rButton(
+					"Pausegame",
+					rVec(this.canvas.width-50,0),
+					rVec(50,50),
+					"II",
+					this.buttonPauseGame.bind(this)));
+			this.windows["SnakePit"].addButton(
+				new rButton(
+					"Right",
+					rVec(this.canvas.width-50,this.canvas.height/2-25),
+					rVec(50,50),
+					">",
+					this.snake.goRight.bind(this.snake)));
+			this.windows["SnakePit"].addButton(
+				new rButton(
+					"Left",
+					rVec(this.canvas.width-150,this.canvas.height/2-25),
+					rVec(50,50),
+					"<",
+					this.snake.goLeft.bind(this.snake)));
+			this.windows["SnakePit"].addButton(
+				new rButton(
+					"Up",
+					rVec(this.canvas.width-100,this.canvas.height/2-75),
+					rVec(50,50),
+					"^",
+					this.snake.goUp.bind(this.snake)));
+			this.windows["SnakePit"].addButton(
+				new rButton(
+					"Down",
+					rVec(this.canvas.width-100,this.canvas.height/2+25),
+					rVec(50,50),
+					"V",
+					this.snake.goDown.bind(this.snake)));
+			
+			this.windows["SnakePit"].addEventListener("mouseup", function (event) {console.log(event);});
+
+			this.setLocation("Start");
+		}
+		
+		resetGame() {
+			//Reset Game here
+			this.snake.reset();
+		}
+
+		gameOver() {
+			this.setLocation("Gameover");
+		}
+
+		renderLoadScreen(timeStamp, progress) {
+			this.canvasContext.fillStyle = "#AAAAAA";
+			this.canvasContext.fillRect(150 ,136 , 100, 28);
+			this.canvasContext.fillStyle = "#FFFFFF"
+			this.canvasContext.font = "14px Arial";
+			this.canvasContext.fillText("Loading...", 154, 155)
+		}
+
+		animate(timeStamp) {
+			super.animate(timeStamp);
+
+			if (this.currentWindow.name != "SnakePit") {return;}
+
+			if (!this.snake.alive) {
+				this.gameOver();
+			}
+		}
+
+		clear(timeStamp) {
+			super.clear(timeStamp);
+
+			this.canvasContext.clearRect(this.canvas.width/2-50 ,0 , 100, 28);
+		}
+
+		render(timeStamp) {
+			super.render(timeStamp);
+
+			//Render world elements eg: score
+			if (this.currentWindow.name == "Start") { return; }
+			
+			this.canvasContext.fillStyle = "rgba(200,200,200,0.5)";
+			this.canvasContext.fillRect(this.canvas.width/2-50 ,0 , 100, 28);
+			this.canvasContext.fillStyle = "rgba(0,0,0,0.5)"
+			this.canvasContext.font = "24px Arial";
+			this.canvasContext.textAlign = "center";
+			this.canvasContext.fillText(this.snake.score(), this.canvas.width/2 , 24);
+		}
+	}
+
+	function start() {
+		window.AudioContext = window.AudioContext || window.webkitAudioContext;
+		var audioContext = new AudioContext();
+
+		var canvas = document.getElementById("main");
+		
+		var game = new SnakeGame(canvas, audioContext);
+
+		game.start();
+	}
+	</script>
+</head>
+
+<body onLoad="start()" style="margin:10px;">
+	<canvas id="main" width="640" height="320"></canvas>
+</body>
+
+</html>
+
+

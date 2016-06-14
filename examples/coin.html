@@ -1,0 +1,317 @@
+<html>
+
+<head>
+	<script src="../rgame.js" type="text/javascript" ></script>
+	<script>
+
+	class CoinGame extends rGame {
+		constructor(canvasContext, audioContext) {
+			super("CoinGame", canvasContext, audioContext);
+
+			this.score = 0;
+
+			this.coinCount = 10;
+			
+			this.coins = [];
+		}
+
+		addAssets() {
+			super.addAssets();
+			
+			this.addAsset(
+				new rSound(
+					"ring",
+					"sounds/coin.wav",
+					this.audioContext));
+
+			this.addAsset(
+				new rImageSet(
+					"coinsprite", 
+					"images/coin-sprite.png"));
+
+			this.assets["coinsprite"].generateSequence("spin", rVec(0,0), 100, 100, 10);
+
+			this.addAsset(
+				new rImageSet(
+					"countdown",
+					"images/frame-sprite.png"));
+
+			this.assets["countdown"].generateSequence("count", rVec(0,0), 80, 80, 5);
+
+			this.addAsset(
+				new rImageSet(
+					"grass-sprite",
+					"images/grasstile.png"));
+
+			this.assets["grass-sprite"].generateSequence("grass", rVec(0,0), 64, 64, 1);
+
+			this.addAsset(
+				new rImageSet(
+					"boy-sprite",
+					"images/child_sprite_model_tx.png"));
+
+			this.assets["boy-sprite"].generateSequence(
+				"go-right",
+				rVec(0,128),
+				32,64,
+				8);
+
+			this.assets["boy-sprite"].generateSequence(
+				"go-left",
+				rVec(0,192),
+				32,64,
+				8);
+
+			this.assets["boy-sprite"].generateSequence(
+				"go-up",
+				rVec(0,0),
+				32,64,
+				5);
+
+			this.assets["boy-sprite"].generateSequence(
+				"go-down",
+				rVec(0,64),
+				32,64,
+				5);
+
+			this.assets["boy-sprite"].generateSequence(
+				"face-down",
+				rVec(64,64),
+				32,64,
+				1);
+
+			this.assets["boy-sprite"].generateSequence(
+				"face-up",
+				rVec(64,0),
+				32,64,
+				1);
+
+			this.assets["boy-sprite"].generateSequence(
+				"face-left",
+				rVec(0,192),
+				32,64,
+				1);
+
+			this.assets["boy-sprite"].generateSequence(
+				"face-right",
+				rVec(0,128),
+				32,64,
+				1);
+		}
+
+		menuStart() {
+			this.resetGame();
+			this.setLocation("Level");
+		}
+
+		menuResume() {
+			this.setLocation("Level");
+		}
+
+		menuExitToStart() {
+			this.setLocation("Start");
+		}
+
+
+		setupGame() {
+			super.setupGame();
+
+			this.addWindow(
+				new rMenu(
+					"Start", this.canvas.width, this.canvas.height, rVec(150,94)));
+			this.windows["Start"].addMenuItem(
+				new rMenuItem(
+					"Start",
+					this.menuStart.bind(this)));
+			this.windows["Start"].addMenuItem(
+				new rMenuItem(
+					"About",
+					function () {}));
+
+
+			this.addWindow(
+				new rMenu(
+					"Pause", this.canvas.width, this.canvas.height, rVec(150,94)));
+			this.windows["Pause"].addMenuItem(
+				new rMenuItem(
+					"Resume",
+					this.menuResume.bind(this)));
+			this.windows["Pause"].addMenuItem(
+				new rMenuItem(
+					"Exit to Start",
+					this.menuExitToStart.bind(this)));
+
+
+			this.addWindow(
+				new rWindow(
+					"Level",  this.canvas.width, this.canvas.height));
+			this.windows["Level"].addEventListener("keydown", this.keyDownEvent.bind(this));
+			this.windows["Level"].addEventListener("keyup", this.keyUpEvent.bind(this));
+
+			var backgroundContext = this.windows["Level"].getBackgroundContext();
+			backgroundContext.fillStyle = "#CCCCCC";
+			backgroundContext.fillRect(0, 0, this.canvas.width, this.canvas.height);
+			for (var x = 0; x < 7; x++) {
+				for (var y = 0; y < 5; y++) {	
+					this.assets["grass-sprite"].render(
+						backgroundContext, 
+						"grass", 
+						0, 
+						64*x, 64*y, 
+						64, 64);
+				}
+			}
+
+			this.setLocation("Start");						
+
+			this.player = new rActor(
+				"Player1",
+				rVec(200,150),
+				rVec(32,64),
+				0,
+				this.assets['boy-sprite'],
+				50);
+			this.windows["Level"].addObject(this.player);
+			this.player.walkSpeed = 2;
+			this.player.stop();
+
+			for(var i = 0; i < this.coinCount; i++) {
+				this.coins[i] = new rAnimatedObject(
+						"coin"+i,
+						rVec(this.canvas.width * Math.random() + 10, this.canvas.height * Math.random()+10),
+						rVec(30,30),
+						0,
+						this.assets['coinsprite'], "spin",
+						50);
+				this.windows["Level"].addObject(this.coins[i]);
+			}
+
+			this.canvasContext.clearRect(0, 0, this.canvas.width, this.canvas.height);
+		}
+
+		resetGame() {
+			this.score = 0;
+			this.player.position.setVal(200,150);
+
+			for(var i = 0; i < this.coinCount; i++) {
+				this.coins[i].position.x = this.canvas.width * Math.random();
+				this.coins[i].position.y = this.canvas.height * Math.random();
+			}
+		}
+
+		renderLoadScreen(timeStamp, progress) {
+			this.canvasContext.fillStyle = "#AAAAAA";
+			this.canvasContext.fillRect(150 ,136 , 100, 28);
+			this.canvasContext.fillStyle = "#FFFFFF"
+			this.canvasContext.font = "14px Arial";
+			this.canvasContext.fillText("Loading...", 154, 155)
+		}
+
+		pointInBox(x, y, bx1, by1, bx2, by2) {
+			if (x > bx1 && x < bx2) {
+				if (y > by1 && y < by2) {
+					
+					return true;
+				}
+			}
+			return false;
+		}
+
+
+		animate(timeStamp) {
+			super.animate(timeStamp);
+
+			if (this.currentWindow.name != "Level") {return;}
+
+			for (var i = 0; i < this.coinCount; i++) {
+				if (this.pointInBox(
+					this.player.position.x, this.player.position.y,
+					this.coins[i].position.x - this.coins[i].size.x, 
+					this.coins[i].position.y - this.coins[i].size.y,
+					this.coins[i].position.x, this.coins[i].position.y)) {
+
+					this.score += 1;
+					this.assets["ring"].play();
+
+					this.coins[i].position.x = 400 * Math.random();
+					this.coins[i].position.y = 300 * Math.random();
+
+				}
+			}			
+		}
+
+		render(timeStamp) {
+			super.render(timeStamp);
+
+			//Render world forground
+			if (this.currentWindow.name != "Level") {return;}
+			
+			this.canvasContext.fillStyle = "#AAAAAA";
+			this.canvasContext.fillRect(150 ,0 , 100, 28);
+			this.canvasContext.fillStyle = "#000000"
+			this.canvasContext.font = "24px Arial";
+			this.canvasContext.fillText(this.score, 154, 24);
+		}
+
+		keyDownEvent(event) {
+			if (this.paused) { return; }
+
+			var keyCode = event.keyCode;
+			if (keyCode == '38') {
+				// up arrow
+				this.player.goUp();
+			}
+			if (keyCode == '40') {
+				// down arrow
+				this.player.goDown();
+			}
+			if (keyCode == '39') {
+				// right arrow
+				this.player.goRight();
+			}
+			if (keyCode == '37') {
+				// left arrow
+				this.player.goLeft();
+			}
+		}
+
+		keyUpEvent(event) {
+			var keyCode = event.keyCode;
+
+			if (keyCode == "27") {
+				// escape
+				this.setLocation("Pause");
+				/*
+				if (this.paused) {
+					this.resumeGame();
+				} else {
+					this.pauseGame();
+				}
+				*/
+			}
+
+			if (this.paused) { return; }
+			
+			this.player.stop();
+		}
+	}
+
+	function start() {
+		window.AudioContext = window.AudioContext || window.webkitAudioContext;
+		var audioContext = new AudioContext();
+
+		var canvas = document.getElementById("main");
+		
+		var game = new CoinGame(canvas, audioContext);
+
+		game.start();
+	}
+
+	</script>
+</head>
+
+<body onLoad="start()" style="margin:10px;">
+	<canvas id="main" width="400" height="300"></canvas>
+</body>
+
+</html>
